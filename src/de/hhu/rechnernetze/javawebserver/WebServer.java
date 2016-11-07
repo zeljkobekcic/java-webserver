@@ -2,6 +2,7 @@ package de.hhu.rechnernetze.javawebserver;
 
 import java.io.*;
 import java.net.*;
+import java.nio.file.Paths;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -78,6 +79,34 @@ public final class WebServer implements Runnable {
         // Instancing an HttpRequest object to handle the accepted connection
         HttpRequest httpRequest = new HttpRequest(socket, mimetype);
         return httpRequest;
+    }
+
+    /***************************************************************************
+     * Running the program.
+     *
+     * @param args The path to the mime.types file
+     * @throws Exception
+     **************************************************************************/
+    public static void main(String[]args) throws Exception {
+
+        MIMEType.logger.setLevel(Level.WARNING);
+        WebServer.logger.setLevel(Level.WARNING);
+        HttpRequest.logger.setLevel(Level.WARNING);
+
+        if(args.length == 2 && args[0].equals("-mime")){
+
+            MIMEType mimetype = new MIMEType(Paths.get(args[1]));
+
+            //Setting port number and starting the server
+            int port = 6789;
+            WebServer webServer = new WebServer(port, mimetype);
+
+            new Thread(webServer).start();
+
+        } else {
+            System.out.println("PLEASE SPECIFY AN MIME FILE WITH -mime <path/to/the/file>");
+        }
+
     }
 }
 

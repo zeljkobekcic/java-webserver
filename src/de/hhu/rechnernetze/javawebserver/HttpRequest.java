@@ -65,6 +65,13 @@ final class HttpRequest implements Runnable {
         }
     }
 
+    //checking if the file exists
+    private boolean checkIfFileExists(Path path){
+        File file = path.toFile();
+        return file.isFile() && file.exists();
+    }
+
+    //processing the http request and then closing the streams.
     private void processHttpRequest() throws IOException {
 
         dataOutputStream = new DataOutputStream(socket.getOutputStream());
@@ -79,23 +86,33 @@ final class HttpRequest implements Runnable {
         socket.close();
     }
 
+    //reading the file the user asked for
+    //I am using this method only to get the byte size of the requested File.
+    private String readFile(FileInputStream fileInputStream) throws IOException {
+        byte[] buffer = new byte[1024];
+        int bytes = 0;
+
+        String content = "";
+
+        while ((bytes = fileInputStream.read(buffer)) != -1) {
+            content += new String(buffer);
+        }
+        return content;
+    }
+
+    //sending the file safe
+    //problems occurred if I have not used this method for sending the entity body
     private void sendBytes(FileInputStream fileInputStream) throws IOException {
 
         byte[] buffer = new byte[1024];
         int bytes = 0;
 
-        StringBuilder stringBuilder = new StringBuilder();
-
-
         while ((bytes = fileInputStream.read(buffer)) != -1) {
-            System.out.println(buffer.toString());
-            stringBuilder.append(buffer);
-            System.out.println(bytes);
             dataOutputStream.write(buffer, 0, bytes);
         }
-        System.out.println(stringBuilder.toString());
     }
 
+    //getting the contentType for the file ending
     private String contentType(String fileName) {
         //if the file has no data type at the end it will pass nearly the
         //entire string and get me the default value
@@ -107,10 +124,12 @@ final class HttpRequest implements Runnable {
          return mimeType.getMIMEType(fileEnding);
     }
 
+    //responding to the request depending on the HTTP request method
     private void respondToRequest() throws IOException {
+
         String requestLine = bufferedReader.readLine();
 
-        logger.log(Level.FINEST, "REQUESTLINE :\t" + requestLine);
+        logger.log(Level.FINE, "REQUESTLINE :\t" + requestLine);
 
         StringTokenizer tokens = new StringTokenizer(requestLine);
         String method = tokens.nextToken();
@@ -121,12 +140,13 @@ final class HttpRequest implements Runnable {
         //directory.
         fileName = "." + fileName;
 
-        logger.log(Level.FINEST, "REQUEST METHOD :\t" + method);
+        logger.log(Level.FINER, "REQUEST METHOD :\t" + method);
 
         switch (method){
             case "GET":
                 respondToGET(fileName);
                 break;
+
             case "HEAD":
                 respondToHEAD(fileName);
                 break;
@@ -142,7 +162,7 @@ final class HttpRequest implements Runnable {
     }
 
     //
-    // RESPONDING TO REQUEST METHODS
+    // RESPONDING TO REQUEST METHODS WITH MORE METHODS
     //
     private void respondToGET(String fileName) throws IOException {
 
@@ -150,43 +170,61 @@ final class HttpRequest implements Runnable {
 
         boolean fileExists = checkIfFileExists(Paths.get(fileName));
 
-        String statusLine;
-        SimpleDateFormat simpleDateFormat = new SimpleDateFormat("EEE, dd. MMM yyyy HH:mm:ss ");
-        String date = "Date: " + simpleDateFormat.format(new Date()) + CRLF;
+        SimpleDateFormat simpleDateFormat =
+                new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss ");
 
-        String contentTypeLine;
-        String entityBody = null;
+        String statusLine = "";
+        String contentType = "";
+        String contentLength = "";
+        String entityBody = "";
+        String date = "Date: " + simpleDateFormat.format(new Date());
 
         String userAgent;
-        while(!(userAgent = bufferedReader.readLine()).toUpperCase().startsWith("USER-AGENT")){
-            System.out.println(userAgent);
-        }
+
+        //looping to the user agent, everything else is not relevant now.
+        while(!(userAgent = bufferedReader.readLine())
+                .toUpperCase().startsWith("USER-AGENT:"));
 
         logger.log(Level.FINEST, "THE REQUESTED FILE IS : " + fileName);
 
         if (fileExists) {
-            statusLine = "HTTP/1.0 200 OK" + CRLF;
+            statusLine = "HTTP/1.0 200 OK";
+            contentType = "Content-Type: " + contentType(fileName);
+            entityBody = readFile(new FileInputStream(Paths.get(fileName).toFile()));
 
-            contentTypeLine = "Content-type: " + contentType(fileName) + CRLF;
             logger.log(Level.FINEST, "FILE HAS BEEN FOUND");
         } else {
-            statusLine = "HTTP/1.0 404 Not Found" + CRLF;
-            contentTypeLine = "Content-type: " + contentType("htm") + CRLF;
-            entityBody = "<HTML>" +
-                    "<HEAD><TITLE>NOT FOUND</TITLE></HEAD>" +
-                    "<BODY>I COULD NOT FIND THE FILE YOU WERE ASKING FOR<br>BUT" +
-                    "I KNOW YOU IP-ADDRESS WHICH IS "+
-                    socket.getRemoteSocketAddress().toString() + "<br>"
-                    + userAgent + "<br>" + "</BODY></HTML>";
+            statusLine = "HTTP/1.0 404 Not Found";
+            contentType = "Content-type: " + contentType("htm");
+            entityBody = "<HTML>\n" +
+                    "    <HEAD>\n" +
+                    "        <TITLE>\n" +
+                    "            NOT FOUND" +
+                    "        </TITLE>\n" +
+                    "    </HEAD>\n" +
+                    "    <BODY>\n" +
+                    "       I COULD NOT FIND THE FILE YOUR WERE ASKING FOR" +
+                    "<p>" +
+                    "BUT I KNOW YOU IP-ADDRESS, WHICH IS :<b> " +
+                    socket.getRemoteSocketAddress().toString() +
+                    "</b></p><p>" +
+                    "AND YOUR USER AGENT WHICH IS: <b>" +
+                    //removing the user-agent: substring and trimming the
+                    // string so that it looks nice
+                    userAgent.substring(new String("USER-AGENT: ").length()).trim() +
+                    "</b><br>" +
+                    "</BODY>\n" +
+                    "</HTML>";
+
         }
 
-        String contentLength = "Content-Length: " +
-                contentTypeLine.getBytes("UTF-8").length + CRLF;
+        contentLength = "Content-Length: " + entityBody.getBytes("UTF-8").length;
 
-        dataOutputStream.writeBytes(statusLine);
-        dataOutputStream.writeBytes(date);
-        dataOutputStream.writeBytes(contentTypeLine);
-        dataOutputStream.writeBytes(contentLength);
+        //pushing these to you back
+        dataOutputStream.writeBytes(statusLine + CRLF);
+        dataOutputStream.writeBytes(date + CRLF);
+        dataOutputStream.writeBytes(contentType + CRLF);
+        dataOutputStream.writeBytes(contentLength + CRLF);
         dataOutputStream.writeBytes(CRLF);
 
         if (fileExists) {
@@ -202,82 +240,83 @@ final class HttpRequest implements Runnable {
 
     private void respondToHEAD(String fileName) throws IOException {
 
-
-        System.out.println(fileName);
-
         logger.log(Level.FINEST, "REQUESTED FILE IS :\t" + fileName);
 
         boolean fileExists = checkIfFileExists(Paths.get(fileName));
 
-        String statusLine;
+        SimpleDateFormat simpleDateFormat =
+                new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss ");
 
-        SimpleDateFormat simpleDateFormat = new SimpleDateFormat("'Date:' EEE, dd. MMM yyyy HH:mm:ss z");
-        String date = simpleDateFormat.format(new Date()) + CRLF;
-
-        String contentTypeLine;
+        String statusLine = "";
+        String contentType = "";
+        String entityBody = "";
+        String contentLength = "";
+        String date = "Date: " + simpleDateFormat.format(new Date());
 
         logger.log(Level.FINEST, "THE REQUESTED FILE IS : " + fileName);
 
         if (fileExists) {
-            statusLine = "HTTP/1.0 200 OK" + CRLF;
-            contentTypeLine = "Content-type: " + contentType(fileName) + CRLF;
+            statusLine = "HTTP/1.0 200 OK";
+            contentType = "Content-type: " + contentType(fileName);
             logger.log(Level.FINEST, "FILE HAS BEEN FOUND");
+            entityBody = readFile(new FileInputStream(Paths.get(fileName).toFile()));
         } else {
-            statusLine = "HTTP/1.0 404 Not Found" + CRLF;
-            contentTypeLine = "Content-type: " + contentType("htm") + CRLF;
+            statusLine = "HTTP/1.0 404 Not Found";
+            contentType = "Content-type: " + contentType("htm");
+            contentLength = "Content-Length: " + entityBody.getBytes("UTF-8").length;
             logger.log(Level.FINEST, "FILE NOT FOUND");
         }
 
-        dataOutputStream.writeBytes(statusLine);
-        dataOutputStream.writeBytes(date);
-        dataOutputStream.writeBytes(contentTypeLine);
+        contentLength = "Content-Length: " + entityBody.getBytes("UTF-8").length;
+
+        dataOutputStream.writeBytes(statusLine + CRLF);
+        dataOutputStream.writeBytes(date + CRLF);
+        dataOutputStream.writeBytes(contentType + CRLF);
+        dataOutputStream.writeBytes(contentLength + CRLF);
         dataOutputStream.writeBytes(CRLF);
     }
 
     private void respondToPOST() throws IOException {
+
+        SimpleDateFormat simpleDateFormat =
+                new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss ");
+
         String statusLine = "HTTP/1.0 501 NOT IMPLEMENTED YET";
-        String contentTypeLine = "Content-type: " + contentType("htm") + CRLF;
-
-        SimpleDateFormat simpleDateFormat = new SimpleDateFormat("'Date:' EEE, dd. MMM yyyy HH:mm:ss z");
-        String date = simpleDateFormat.format(new Date()) + CRLF;
-
+        String contentType = "Content-type: " + contentType("htm");
+        String date = "Date: " + simpleDateFormat.format(new Date());
         String entityBody = "<HTML>" +
                 "<HEAD><TITLE>NOT IMPLEMENTED YEY</TITLE></HEAD>" +
                 "<BODY>I COULD NOT FIND THE FILE YOU WERE ASKING FOR</BODY></HTML>";
+        String contentLength = "Content-Length: " + entityBody.getBytes("UTF-8").length;
 
-        dataOutputStream.writeBytes(statusLine);
-        dataOutputStream.writeBytes(date);
-        dataOutputStream.writeBytes(contentTypeLine);
+        dataOutputStream.writeBytes(statusLine + CRLF);
+        dataOutputStream.writeBytes(date + CRLF);
+        dataOutputStream.writeBytes(contentType + CRLF);
+        dataOutputStream.writeBytes(contentLength + CRLF);
         dataOutputStream.writeBytes(CRLF);
         dataOutputStream.writeBytes(entityBody);
 
     }
 
     private void respondToInvalid() throws IOException {
+
+        SimpleDateFormat simpleDateFormat =
+                new SimpleDateFormat("'Date:' EEE, dd. MMM yyyy HH:mm:ss z");
+
         String statusLine = "HTTP/1.0 400 BAD REQUEST";
-        String contentTypeLine = "Content-type: " + contentType("htm") + CRLF;
-
-        SimpleDateFormat simpleDateFormat = new SimpleDateFormat("'Date:' EEE, dd. MMM yyyy HH:mm:ss z");
-        String date = simpleDateFormat.format(new Date()) + CRLF;
-
+        String contentType = "Content-type: " + contentType("htm");
+        String date = "Date: " + simpleDateFormat.format(new Date());
         String entityBody = "<HTML>" +
                 "<HEAD><TITLE>BAD REQUEST</TITLE></HEAD>" +
                 "<BODY>I DON'T KNOW WHAT YOU WANT ME TO DO</BODY></HTML>";
+        String contentLength = "Content-Length: " + entityBody.getBytes("UTF-8").length;
 
-        dataOutputStream.writeBytes(statusLine);
-        dataOutputStream.writeBytes(date);
-        dataOutputStream.writeBytes(contentTypeLine);
-        //@TODO implement sending the size in bytes of the entityBody
-        //dataOutputStream.writeBytes();
+        dataOutputStream.writeBytes(statusLine + CRLF);
+        dataOutputStream.writeBytes(date + CRLF);
+        dataOutputStream.writeBytes(contentType + CRLF);
+        dataOutputStream.writeBytes(contentLength + CRLF);
         dataOutputStream.writeBytes(CRLF);
         dataOutputStream.writeBytes(entityBody);
     }
 
-    //
-    //
-    //
-    private boolean checkIfFileExists(Path path){
-        File file = path.toFile();
-        return file.isFile() && file.exists();
-    }
 }

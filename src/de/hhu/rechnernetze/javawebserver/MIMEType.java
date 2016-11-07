@@ -34,6 +34,11 @@ class MIMEType {
      **************************************************************************/
     public MIMEType(Path path) throws IOException {
 
+        //
+        // catching arguments which would lead to an illegal object state.
+        //
+
+        //If the argument is just wrong.
         if(path == null) {
             logger.log(Level.INFO, "THE PROVIDED PATH IS NOT VALID");
             throw new IllegalArgumentException("Illegal Path " + path);
@@ -45,10 +50,12 @@ class MIMEType {
         if(!file.isFile()) {
             logger.log(Level.SEVERE, "THE PROVIDED PATH TO THE FILE IS NOT A FILE");
             throw new IllegalArgumentException("Illegal Path " + path +
-                    " . The path is not pointing to a file.");
+                    " The path is not pointing to a file.");
         }
 
-        logger.info("STARTING PARSING DATA FROM THE PROVIDED FILE : " + path.toString());
+
+
+        logger.log(Level.FINEST, "STARTING PARSING DATA FROM THE PROVIDED FILE : " + path.toString());
 
         FileReader fileReader = new FileReader(file);
         BufferedReader bufferedReader = new BufferedReader(fileReader);
@@ -63,6 +70,9 @@ class MIMEType {
         }
 
         logger.log(Level.INFO, "FINISHED PARSING DATA FROM THE GIVEN FILE SUCCESSFUL");
+
+        fileReader.close();
+        bufferedReader.close();
     }
 
     /**************************************************************************
