@@ -1,6 +1,6 @@
 #Java-WebSever
 
-A simple WebServer written for the the module "Computernetworks" (original name is "Rechnernetze") which is HTTP 1.0 compatible.
+A simple WebServer written for the the module "Computernetworks" which is HTTP 1.0 compatible.
 
 How to compile:
 `
