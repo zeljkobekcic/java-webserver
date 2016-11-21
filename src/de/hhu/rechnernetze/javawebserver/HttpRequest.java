@@ -25,8 +25,8 @@ final class HttpRequest implements Runnable {
     MIMEType mimeType;
     Socket socket;
 
-    DataOutputStream dataOutputStream;
-    BufferedReader bufferedReader;
+    DataOutputStream dataOutputStream=null;
+    BufferedReader bufferedReader=null;
 
 
     /**************************************************************************
@@ -56,11 +56,38 @@ final class HttpRequest implements Runnable {
      **************************************************************************/
     @Override
     public void run() {
+        processHttpRequest();
+        close();
+    }
+
+    //closing the streams
+    public void close() {
         try {
-            processHttpRequest();
+            dataOutputStream.close();
         } catch (IOException e) {
-            logger.log(Level.WARNING, "AN IO-ERROR OCCURRED WHILE PROCESSING" +
-                    " THE HTTP REQUEST", e);
+            System.err.println("AN ERROR OCCURRED WHILE CLOSING THE " +
+                    "DATAOUTPUTSTREAM");
+            e.printStackTrace();
+        } catch (NullPointerException e) {
+            System.err.println("THE DATAOUTPUTSTREAM HAS NOT BEEN CLOSED " +
+                    "BECAUSE IT WAS NULL");
+        }
+
+        try {
+            bufferedReader.close();
+        } catch (IOException e) {
+            System.err.println("AN ERROR OCCURRED WHILE CLOSING THE " +
+                    "BUFFEREDREADER");
+            e.printStackTrace();
+        } catch (NullPointerException e) {
+            System.err.println("THE BUFFEREDREADER HAS NOT BEEN CLOSED " +
+                    "BECAUSE IT WAS NULL");
+        }
+
+        try {
+            socket.close();
+        } catch (IOException e) {
+            System.err.println("AN ERROR OCCURRED WHILE CLOSING THE SOCKET");
             e.printStackTrace();
         }
     }
@@ -72,18 +99,16 @@ final class HttpRequest implements Runnable {
     }
 
     //processing the http request and then closing the streams.
-    private void processHttpRequest() throws IOException {
-
-        dataOutputStream = new DataOutputStream(socket.getOutputStream());
-        bufferedReader =
-                new BufferedReader(new InputStreamReader(socket.getInputStream()));
-
-        respondToRequest();
-
-        //closing the closeables
-        dataOutputStream.close();
-        bufferedReader.close();
-        socket.close();
+    private void processHttpRequest() {
+        try {
+            dataOutputStream = new DataOutputStream(socket.getOutputStream());
+            bufferedReader = new BufferedReader(
+                    new InputStreamReader(socket.getInputStream()));
+            respondToRequest();
+        } catch( IOException e){
+            System.err.println("AN ERROR OCCURRED WHILE PROCESSING THE HTTP " +
+                    "REQUEST");
+        }
     }
 
     //reading the file the user asked for
@@ -318,5 +343,4 @@ final class HttpRequest implements Runnable {
         dataOutputStream.writeBytes(CRLF);
         dataOutputStream.writeBytes(entityBody);
     }
-
 }
